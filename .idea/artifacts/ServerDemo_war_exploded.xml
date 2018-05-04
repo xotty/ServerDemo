@@ -9,6 +9,7 @@
         <element id="directory" name="lib">
           <element id="library" level="project" name="org.json:json:Latest" />
           <element id="library" level="project" name="commons-fileupload:commons-fileupload:1.3.3" />
+          <element id="library" level="project" name="javax.websocket:javax.websocket-api:1.1" />
         </element>
       </element>
       <element id="javaee-facet-resources" facet="ServerDemo/web/Web" />
