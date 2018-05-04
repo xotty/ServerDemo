@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Tomcat 8.5.30">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/jsp-api1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/servlet-api1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/javax.websocket-api-1.1.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.ideaLibSources/javax.websocket-api-1.1-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
