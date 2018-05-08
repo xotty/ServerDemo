@@ -20,7 +20,6 @@
 package org.xottys.server.http;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 import javax.websocket.OnClose;
@@ -38,6 +37,7 @@ import javax.websocket.server.ServerEndpoint;
 
         //concurrent包的线程安全Set，用来存放每个客户端对应的WebSocketServerDemo对象。若要实现服务端与单一客户端通信的话，可以使用Map来存放，其中Key可以为用户标识
         private static CopyOnWriteArraySet<WebSocketServerDemo> webSocketSet = new CopyOnWriteArraySet<WebSocketServerDemo>();
+
 
         //与某个客户端的连接会话，需要通过它来给客户端发送数据
         private Session session;
@@ -72,19 +72,19 @@ import javax.websocket.server.ServerEndpoint;
          * @param session 可选的参数
          */
         @OnMessage
-        public void OnMessage(String message, Session session) {
+        public void OnMessage(String message,Session session) {
             System.out.println("来自客户端的消息:" + message);
 
             //给所有连接上的WebSocket客户端群发消息
-            for(WebSocketServerDemo item: webSocketSet){
+            for(WebSocketServerDemo item: webSocketSet)
                 try {
-                    item.sendMessage("WebSocket服务器返回："+message,session);
+                    sendMessage("WebSocket服务器返回："+message,item );
                 } catch (IOException e) {
                     e.printStackTrace();
                     continue;
                 }
             }
-        }
+
         /*接收数据的方法只能有一个，但方法名可以自定义，参数数量和类型必须符合规定：
           --原始数据类型：int，float,byte等
           --文本：String、Reader
@@ -113,16 +113,16 @@ import javax.websocket.server.ServerEndpoint;
          * @param message
          * @throws IOException
          */
-        public void sendMessage(String message,Session session) throws IOException{
+        public void sendMessage(String message,WebSocketServerDemo webSocketServerDemo) throws IOException{
             //同步发送消息
-            session.getBasicRemote().sendText(message);
+            webSocketServerDemo.session.getBasicRemote().sendText(message);
             /*sendBinary(ByteBuffer data)：发送二进制
             * sendObject(Object data)：发送对象，此时需要将提供一个对象编码器类(继承自Encoder.Text或Encoder.Binary)：
             * @ServerEndpoint(value="/websocket", encoders = { ServerEncoder.class })
             */
 
             //异步发送消息
-            //session.getAsyncRemote().sendText(message);
+            //this.session.getAsyncRemote().sendText(message);
         }
 
         public static synchronized int getOnlineCount() {
