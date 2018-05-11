@@ -1,15 +1,15 @@
 /**
- * 使用参数：服务器地址localhost，端口号3344；客户端端口号：3345
+ * 使用参数：服务器地址localhost或实际ip地址，端口号9002；客户端端口号：9001
  *
- * 本例通过HttpServlet启动DatagramSocket，演示了Udp Socket服务器的主要功能：
- * 1）在init()中实例化DatagramSocket，通常要绑定一个1024以上的端口号
- * 2）在service()中启动DatagramSocket，等待客户端数据，收到后对数据进行解析和处理，并组织服务器数据输出到客户端，其中主要使用了：
+ * 本例通过HttpServlet启动MulticastSocket，演示了Udp组播Socket服务器的主要功能：
+ * 1）在init()中实例化MulticastSocket，通常要绑定一个1024以上的端口号
+ * 2）在service()中启动MulticastSocket，等待客户端数据，收到后对数据进行解析和处理，并组织服务器数据输出到客户端，其中主要使用了：
  * --udpSocket.receive(dataPacket):接收客户端数据到dataPacket中
  * --udpSocket.send(dataPacket)：发送服务器数据给客户端
  * 其中 dataPacket = new DatagramPacket(buffer, buffer.length)---接收用
- *     dataPacket = new DatagramPacket(buffer, buffer.length,单播或广播ip,port)---发送用
- * 3) 在destroy()中完成DatagramSocket关闭
- * 4） 用ServletContext保存服务器是否启动的信息
+ *     dataPacket = new DatagramPacket(buffer, buffer.length,组播ip,port)---发送用
+ * 3) 在destroy()中完成MulticastSocket关闭
+ * 4） 用ServletContext保存组播服务器是否启动的信息
  * <p>
  * <p>
  * <br/>Copyright (C), 2017-2018, Steve Chang
@@ -32,35 +32,28 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.*;
 
-@WebServlet(name = "SocketUdp", urlPatterns = ("/udp"))
-public class SocketUdpDemo extends HttpServlet {
+@WebServlet(name = "SocketUdpMulticast", urlPatterns = ("/multicast"))
+public class SocketUdpMulticastDemo extends HttpServlet {
+    //组播地址
+    private static final String mhost  ="239.0.0.1";
+
     private byte[] buffer = new byte[1024];
-    private DatagramSocket udpSocket = null;
+    private MulticastSocket mUdpSocket=null;
     private DatagramPacket dataPacket = null;
-    private InetSocketAddress socketAddress = null;
-    private InetAddress clientAddress;
     private int clientPort = 9001;
     private String clientData;
-    private int serverPort = 9000;
+    private int serverPort = 9002;
 
     @Override
     public void init() throws ServletException {
         super.init();
-        //根据端口号创建套接字地址,一个网卡则为本机当前唯一IP地址
-        socketAddress = new InetSocketAddress(serverPort);
         try {
-            //单播用udp socket
-            udpSocket = new DatagramSocket(null);
-            udpSocket = new DatagramSocket(null);
-            udpSocket.setReuseAddress(true);
-            udpSocket.bind(socketAddress);
+            // 创建组播数据报套接字，将其绑定到指定的本地地址
+            mUdpSocket= new MulticastSocket(serverPort);
+            mUdpSocket.joinGroup(InetAddress.getByName(mhost));
+            mUdpSocket.setTimeToLive(32);
 
-            // 创建数据报套接字，将其绑定到指定的本地地址
-             udpSocket = new DatagramSocket(socketAddress);
-
-
-
-            System.out.println("Udp服务端启动1");
+            System.out.println("Udp组播服务端启动1");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -75,18 +68,18 @@ public class SocketUdpDemo extends HttpServlet {
 
         //将该服务器是否启动过设置到Application属性中，并据此判断再次收到客户端启动请求时如何处理
         ServletContext sc=getServletConfig().getServletContext();
-        String startedFlag = (String) sc.getAttribute("UdpServerStart");
+        String startedFlag = (String) sc.getAttribute("UdpMulticastServerStart");
 
         //服务器初次启动或ServerSocket被关闭后需再次启动服务
         if (startedFlag == null || startedFlag.equals("no")) {
-            sc.setAttribute("UdpServerStart", "yes");
-            System.out.println("Udp服务器启动2");
+            sc.setAttribute("UdpMulticastServerStart", "yes");
+            System.out.println("Udp组播服务器启动2");
 
             //用Servlet启动本socket服务，首先向客户端发送一条信息
             response.setCharacterEncoding("UTF-8");
             try {
                 out = response.getWriter();
-                out.print("Udp Server Start!");
+                out.print("Udp Multicast Server Start!");
                 out.flush();
                 out.close();
             } catch (IOException e) {
@@ -95,31 +88,24 @@ public class SocketUdpDemo extends HttpServlet {
             //启动Udp Socket，并收取报文
             new Thread(() -> {
                 try {
-                    if (udpSocket.isClosed()){
-                        udpSocket = new DatagramSocket(null);
-                        udpSocket.setReuseAddress(true);
-                        udpSocket.bind(socketAddress);}
-                } catch (SocketException e) {
+                    if (mUdpSocket.isClosed()){
+                        mUdpSocket= new MulticastSocket(serverPort);
+                        mUdpSocket.joinGroup(InetAddress.getByName(mhost));
+                        mUdpSocket.setTimeToLive(32);  }
+
+                } catch (IOException e) {
                     e.printStackTrace();
                 }
-                System.out.println("Udp服务器准备接收数据");
+                System.out.println("Udp组播服务器准备接收数据");
                 while (true) {
                     try {
-                        if (udpSocket.isClosed())
-                        {
-                            udpSocket = new DatagramSocket(null);
-                            udpSocket.setReuseAddress(true);
-                            udpSocket.bind(socketAddress);
-                        }
-                        udpSocket.setReceiveBufferSize(1024);
-                        udpSocket.setSendBufferSize(1024);
+                        mUdpSocket.setReceiveBufferSize(1024);
+                        mUdpSocket.setSendBufferSize(1024);
                         buffer = new byte[1024];
                         dataPacket = new DatagramPacket(buffer, buffer.length);
                         System.out.println("Udp Server waiting for client data");
                         //从此套接字接收数据报文
-                        udpSocket.receive(dataPacket);
-                        //从收到的数据报中解析发送方的IP地址
-                        clientAddress = dataPacket.getAddress();
+                        mUdpSocket.receive(dataPacket);
 
                         //从收到的数据报中解析发送方的端口号
                         clientPort = dataPacket.getPort();
@@ -144,17 +130,17 @@ public class SocketUdpDemo extends HttpServlet {
                        //  break;
                     }
                 }
-                sc.setAttribute("UdpServerStart", "no");
-                udpSocket.close();
-                System.out.println("Udp Serverc losed");
+                sc.setAttribute("UdpMulticastServerStart", "no");
+                mUdpSocket.close();
+                System.out.println("Udp Multicast Server closed");
             }).start();
         } else {
-            System.out.println("Udp Server has been started");
+            System.out.println("Udp Multicast Server has been started");
 
             response.setCharacterEncoding("UTF-8");
             try {
                 out = response.getWriter();
-                out.print("Udp Server has been started!");
+                out.print("Udp Multicast Server has been started!");
                 out.flush();
                 out.close();
             } catch (IOException e) {
@@ -169,25 +155,17 @@ public class SocketUdpDemo extends HttpServlet {
         //用于接收非Demo发送的数据
         clientPort=9001;
         buffer = new byte[1024];
-        dataPacket = new DatagramPacket(buffer, buffer.length);
-        dataPacket.setPort(clientPort);
+        dataPacket = new DatagramPacket(buffer, buffer.length,InetAddress.getByName(mhost),clientPort);
         dataPacket.setData(info.getBytes("UTF-8"));
+        mUdpSocket.send(dataPacket);
 
-        dataPacket.setAddress(clientAddress);
-        /*改设为广播地址，就可以直接发送Udp广播
-        String host = "255.255.255.255"; //也可以是其它广播地址
-        InetAddress addr = InetAddress.getByName(host);
-        dataPacket.setAddress(addr);*/
-
-        udpSocket.send(dataPacket);
-
-        System.out.println("Udp Server send：" + info+"---"+clientPort);
+        System.out.println("Udp Multicast Server send：" + info);
     }
 
     @Override
     public void destroy() {
-        System.out.println("Udp Server Closed");
-        udpSocket = null;
+        System.out.println("Udp Multicast Server Closed");
+        mUdpSocket=null;
         super.destroy();
     }
 }

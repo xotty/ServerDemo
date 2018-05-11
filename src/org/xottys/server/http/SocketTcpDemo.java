@@ -5,9 +5,11 @@
  * 1）在init()中实例化ServerSocket，通常要绑定一个1024以上的端口号
  * 2）在service()中启动ServerSocket，等待客户端发送数据以便获取到客户端的socket，收到后对其中的地址和数据进行解析和处理，
  * 并组织服务器数据输出到客户端，其中主要使用了：
- * --socket.getInputStream:接收客户端数据
+ * --socket.getInputStream:接收客户端数据， 收到"end"：关闭服务器socket连接，"stop"：停止服务器socket服务
  * --socket.getOutputStream：发送服务器数据给客户端
- * 3) 在destroy()中完成socket关闭
+ * 3) 在destroy() 中完成socket关闭
+ * 4）本服务器端没有用心跳包来检测客户端是否断开，而是用了socket.sendUrgentData(0xFF)
+ * 5) 用ServletContext保存服务器是否启动的信息
  * <p>
  * <br/>Copyright (C), 2017-2018, Steve Chang
  * <br/>This program is protected by copyright laws.
@@ -62,12 +64,13 @@ public class SocketTcpDemo extends HttpServlet {
             throws ServletException, IOException {
 
         PrintWriter out;
-        // 将该服务器是否启动过设置进入session，并据此判断再次收到客户端启动请求时如何处理
-        HttpSession session = request.getSession();
-        String startedFlag = (String) session.getAttribute("TcpServerStart");
+
+        //将该服务器是否启动过设置到Application属性中，并据此判断再次收到客户端启动请求时如何处理
+        ServletContext sc=getServletConfig().getServletContext();
+        String startedFlag = (String) sc.getAttribute("TcpServerStart");
         //服务器初次启动或ServerSocket被关闭后需再次启动服务
         if (startedFlag == null || !startedFlag.equals("yes")) {
-            session.setAttribute("TcpServerStart", "yes");
+            sc.setAttribute("TcpServerStart", "yes");
             System.out.println("Tcp服务器启动2");
             //用Servlet启动本socket服务，首先向客户端发送一条信息
             response.setCharacterEncoding("UTF-8");
@@ -91,27 +94,27 @@ public class SocketTcpDemo extends HttpServlet {
                 //设置等待客户连接的超时时间，缺省为永久
                 //socket.setSoTimeout(30000);
 
-                System.out.println("第 " + (socketCounter++) + " 个连接");
+                System.out.println("第 " + (socketCounter++) + " 个连接到达");
                 Thread t = new Thread(new ThreadServerSocket(socket));
                 t.start();
             }
             //退出循环意味着需要关闭ServerSocket
-            System.out.println("Tcp Server Close.....");
+            System.out.println("Tcp Server Closed.....");
             try {
                 tcpSocket.close();
                 flag2 = false;
                 //ServerSocket被关闭后需再次启动服务，设置启动标识
-                session.setAttribute("TcpServerStart", "no");
+                sc.setAttribute("TcpServerStart", "no");
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }//根据Session Attribute判断服务器已经启动
         else {
-            System.out.println("Tcp服务未重复启动");
+            System.out.println("Tcp Server has been started!");
             response.setCharacterEncoding("UTF-8");
             try {
                 out = response.getWriter();
-                out.print("Tcp Server Has Been Started!");
+                out.print("Tcp Server has been started!");
                 out.flush();
                 out.close();
             } catch (IOException e) {
@@ -161,16 +164,20 @@ public class SocketTcpDemo extends HttpServlet {
                 while ((length = in.read(buffer)) != -1) {
                     //从客户端收到的字符串
                     clientMsg = new String(buffer, 0, length);
-
-                    //添加服务器信息后返回
-                    serverMsg = "Tcp Socket服务器返回：" + clientMsg;
+                    if (clientMsg.contains("XAH")) {
+                        //收到心跳包信息，不做任何处理
+                        serverMsg = clientMsg;
+                    } else {
+                        //收到非心跳包信息，添加服务器信息后返回
+                        serverMsg = "Tcp Socket Server：" + clientMsg;
+                    }
 
                     //socket输出
                     pw.println(serverMsg);
                     pw.flush();
 
-                    System.out.println(serverMsg);
                     System.out.println("客户端发来：" + clientMsg);
+                    System.out.println("服务器返回："+ serverMsg);
 
                     //收到客户端发送的"end"则关闭socket
                     if ("end".equals(clientMsg)) {
@@ -201,11 +208,13 @@ public class SocketTcpDemo extends HttpServlet {
                 }
                 if (flag2) {
                     try {
+                        //判断客户端socket是否关闭
                         socket.sendUrgentData(0xFF);
                         Thread.sleep(3000);
                     } catch (InterruptedException e1) {
                         e1.printStackTrace();
                     } catch (IOException e2) {
+                        //客户端socket已关闭
                         e2.printStackTrace();
                         in.close();
                         pw.close();
@@ -214,7 +223,7 @@ public class SocketTcpDemo extends HttpServlet {
                         socketCounter--;
                         break;
                     }
-                    System.out.println("当前数据已读完，正在等待新数据......");
+                    System.out.println("当前流中的数据已读完，正在等待新数据......");
                 }
             }
 
