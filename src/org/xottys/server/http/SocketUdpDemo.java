@@ -1,5 +1,5 @@
 /**
- * 使用参数：服务器地址localhost，端口号3344；客户端端口号：3345
+ * 使用参数：服务器地址localhost，端口号9000；客户端端口号：9001
  *
  * 本例通过HttpServlet启动DatagramSocket，演示了Udp Socket服务器的主要功能：
  * 1）在init()中实例化DatagramSocket，通常要绑定一个1024以上的端口号
