@@ -41,6 +41,7 @@ public class SocketTcpDemo extends HttpServlet {
     private ServerSocket tcpSocket;
     private boolean flag1, flag2;
     private int socketCounter = 1;
+    private ServletContext sc;
 
     //生成ServerSocket对象
     @Override
@@ -66,10 +67,11 @@ public class SocketTcpDemo extends HttpServlet {
         PrintWriter out;
 
         //将该服务器是否启动过设置到Application属性中，并据此判断再次收到客户端启动请求时如何处理
-        ServletContext sc=getServletConfig().getServletContext();
+        sc=getServletConfig().getServletContext();
         String startedFlag = (String) sc.getAttribute("TcpServerStart");
         //服务器初次启动或ServerSocket被关闭后需再次启动服务
         if (startedFlag == null || !startedFlag.equals("yes")) {
+            socketCounter=1;
             sc.setAttribute("TcpServerStart", "yes");
             System.out.println("Tcp服务器启动2");
             //用Servlet启动本socket服务，首先向客户端发送一条信息
@@ -202,7 +204,8 @@ public class SocketTcpDemo extends HttpServlet {
                         pw.close();
                         socket.close();
                         tcpSocket.close();
-                        System.out.println("Tcp ServerSocket Close.....");
+                        System.out.println("Tcp ServerSocket Closed.....");
+                        sc.setAttribute("TcpServerStart", "no");
                         break;
                     }
                 }
