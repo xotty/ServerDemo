@@ -31,6 +31,7 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.Part;
 
 import java.io.*;
+import java.net.URLEncoder;
 import java.util.*;
 
 @WebServlet(name = "UpDownServletDemo", urlPatterns = ("/updown"))
@@ -75,25 +76,28 @@ public class UpDownServletDemo extends HttpServlet {
             throws ServletException, IOException {
         //从客户端获取要下载的文件名
         String fileName = request.getParameter("filename");
-
+        response.setCharacterEncoding("UTF-8");
         file = new File(savePath + "/" + fileName);
         if (!file.exists()) {
-            message = fileName + "文件不存在";
+            message = "文件不存在";
         } else {
-            //将下载的文件防放入流中
-            FileInputStream in = new FileInputStream(savePath + "/" + fileName);
-            //设置response的各项参数
-            response.setContentType("application/octet-stream;charset=UTF-8");
-            response.addHeader("content-disposition", "attachment;filename=" + fileName);
-            response.addHeader("Content-Length", "" + file.length());
+            try {
+                message = "下载成功";
+                //将下载的文件防放入流中
+                FileInputStream in = new FileInputStream(savePath + "/" + fileName);
+                //设置response的各项参数
+                response.setContentType("application/octet-stream;charset=UTF-8");
+                response.addHeader("content-disposition", "attachment;filename=" + fileName);
+                response.addHeader("Content-Length", "" + file.length());
+                response.addHeader("result", URLEncoder.encode(message, "UTF-8"));
 
-            //准备reponse输出流
-            ServletOutputStream out = response.getOutputStream();
+                //准备reponse输出流
+                ServletOutputStream out = response.getOutputStream();
 
-            byte[] buffer = new byte[in.available()];
+                byte[] buffer = new byte[in.available()];
 
-            //一次性将服务器文件读到缓冲区，然后写到输出流中发给客户端
-            if (in.read(buffer)==file.length()) {
+                //一次性将服务器文件读到缓冲区，然后写到输出流中发给客户端
+                if (in.read(buffer) == file.length()) {
             /*另一种常用读写流的方法
             byte[] buffer = new byte[512];
             int byteSend;
@@ -101,20 +105,25 @@ public class UpDownServletDemo extends HttpServlet {
                 out.write(buffer,0,byteSend);
             }*/
 
-                in.close();
+                    //将读入的文件流输出到客户端
+                    out.write(buffer);
+                    out.flush();
+                    out.close();
 
-                //将读入的文件流输出到客户端
-                out.write(buffer);
-                out.flush();
-                out.close();
+                    in.close();
 
-                message = fileName + "下载成功";
-            }else
-                message = fileName + "下载失败";
+                } else
+                    message = "下载失败";
+            } catch (IOException e) {
+                e.printStackTrace();
+                message = "下载失败";
+            }
         }
 
         //输出下载结果
-        outputMsg(message, response);
+        // outputMsg(message, response);
+        response.addHeader("result", URLEncoder.encode(message, "UTF-8"));
+        System.out.println(message);
     }
 
     //上传文件一：multipart/form-data，使用commons-fileupload框架，文件的key不能为空
@@ -150,7 +159,7 @@ public class UpDownServletDemo extends HttpServlet {
                     String value = item.getString("UTF-8");
 
                     msg.append(name + "=" + value + "\n");
-                    System.out.println(name + "=" + value);
+
                 }
                 // 如果fileitem中封装的是上传文件
                 else {
@@ -180,14 +189,16 @@ public class UpDownServletDemo extends HttpServlet {
                     in.close();
                     output.close();
                     */
-                    msg.append(filename + "上传成功\n");
+                    msg.append(filename + "上传成功");
                 }
             }
-            message = msg.toString();
+//         message = msg.toString();
+            message = "上传成功";
         } catch (FileUploadException e) {
-            message = "文件上传失败";
+            message = "上传失败";
             e.printStackTrace();
         }
+        System.out.println("doPost(multipart/form-data:commons-fileupload)--"+ message);
         //输出文件上传结果到客户端
         outputMsg(message, response);
     }
@@ -206,23 +217,29 @@ public class UpDownServletDemo extends HttpServlet {
                 fileName = String.valueOf((new Date()).getTime());
             }
         }
-        //定义要输出的服务器的文件流
-        FileOutputStream fis = new FileOutputStream(savePath + "/" + fileName);
+        try {
+            //定义要输出的服务器的文件流
+            FileOutputStream fis = new FileOutputStream(savePath + "/" + fileName);
 
-        //读取客户端的输入字节流，然后写到服务器文件中去
-        ServletInputStream in = request.getInputStream();
+            //读取客户端的输入字节流，然后写到服务器文件中去
+            ServletInputStream in = request.getInputStream();
 
-        byte[] buffer = new byte[1024];
-        int bytesRead;
-        //边读（客户端的字节流）边写（服务器的文件流）
-        while ((bytesRead = in.read(buffer, 0, 1024)) >= 0) {
-            fis.write(buffer, 0, bytesRead);
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            //边读（客户端的字节流）边写（服务器的文件流）
+            while ((bytesRead = in.read(buffer, 0, 1024)) >= 0) {
+                fis.write(buffer, 0, bytesRead);
+            }
+
+            fis.close();
+            in.close();
+            message = "上传成功";
+        } catch (IOException e) {
+            e.printStackTrace();
+            message = "上传失败";
+
         }
-
-        fis.close();
-        in.close();
-        message = fileName + "上传成功";
-
+        System.out.println("doPut(application/octet-stream)--"+message);
         //输出文件上传结果到客户端
         outputMsg(message, response);
     }
@@ -232,30 +249,34 @@ public class UpDownServletDemo extends HttpServlet {
     public void doDelete(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         msg = new StringBuilder();
+        try {
+            //获取文件上传域
+            Collection<Part> parts = request.getParts();
 
-        //获取文件上传域
-        Collection<Part> parts = request.getParts();
-
-        // 循环处理上传的文件
-        for (Part part : parts) {
-            //获取content-disposition请求头格式:form-data; name="xxx";filename="yyy"
-            String header = part.getHeader("content-disposition");
-            //属于文件
-            if (header.contains("filename")) {
-                String fileName = getFileName(header);
-                //把文件写到指定路径
-                part.write(savePath + File.separator + fileName);
-                msg.append(fileName + "上传成功\n");
+            // 循环处理上传的文件
+            for (Part part : parts) {
+                //获取content-disposition请求头格式:form-data; name="xxx";filename="yyy"
+                String header = part.getHeader("content-disposition");
+                //属于文件
+                if (header.contains("filename")) {
+                    String fileName = getFileName(header);
+                    //把文件写到指定路径
+                    part.write(savePath + File.separator + fileName);
+                    msg.append(fileName + "上传成功\n");
+                }
+                //属于字段，没有filename="yyy"这部分
+                else {
+                    String fieldName = part.getName();
+                    String fieldValue = request.getParameter(fieldName);
+                    msg.append(fieldName + "=" + fieldValue + "\n");
+                }
+                message = "上传成功";
+                System.out.println("doDelete（multipart/form-data：Servlet3.0)--"+message);
             }
-            //属于字段，没有filename="yyy"这部分
-            else {
-                String fieldName = part.getName();
-                String fieldValue = request.getParameter(fieldName);
-                msg.append(fieldName + "=" + fieldValue + "\n");
-            }
+        } catch (IOException e1) {
+            message = "上传失败";
         }
-
-        outputMsg(msg.toString(), response);
+        outputMsg(message, response);
     }
 
     @Override
@@ -285,7 +306,6 @@ public class UpDownServletDemo extends HttpServlet {
         String[] tempArr2 = tempArr1[2].split("=");
         //去掉路径，获得文件名
         name = tempArr2[1].substring(tempArr2[1].lastIndexOf(File.separator) + 1).replaceAll("\"", "");
-
         return name;
     }
 }
